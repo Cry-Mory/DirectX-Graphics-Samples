@@ -15,6 +15,8 @@
 #include "StepTimer.h"
 #include "RaytracingHlslCompat.h"
 
+#include <vector>
+
 namespace GlobalRootSignatureParams {
     enum Value {
         OutputViewSlot = 0,
@@ -110,8 +112,14 @@ private:
         D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptorHandle;
         D3D12_GPU_DESCRIPTOR_HANDLE gpuDescriptorHandle;
     };
-    D3DBuffer m_indexBuffer;
-    D3DBuffer m_vertexBuffer;
+
+	struct D3DMesh
+	{
+		D3DBuffer indexBuffer;
+		D3DBuffer vertexBuffer;
+	};
+
+	std::vector<D3DMesh> m_d3dMeshes;
 
     // Acceleration structure
     ComPtr<ID3D12Resource> m_bottomLevelAccelerationStructure;
@@ -166,6 +174,7 @@ private:
     void CopyRaytracingOutputToBackbuffer();
     void CalculateFrameStats();
     UINT AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* cpuDescriptor, UINT descriptorIndexToUse = UINT_MAX);
+	UINT CreateDescriptor(D3DBuffer* buffer);
     UINT CreateBufferSRV(D3DBuffer* buffer, UINT numElements, UINT elementSize);
     WRAPPED_GPU_POINTER CreateFallbackWrappedPointer(ID3D12Resource* resource, UINT bufferNumElements);
 };
