@@ -106,15 +106,16 @@ void D3D12RaytracingSimpleLighting::InitializeScene()
     // Setup camera.
     {
         // Initialize the view and projection inverse matrices.
-        m_eye = { 0.0f, 2.0f, -3.0f, 1.0f };
-        m_at = { 0.0f, 0.5f, 0.0f, 1.0f };
-        XMVECTOR right = { 1.0f, 0.0f, 0.0f, 0.0f };
+        m_eye = { 0.9f, 0.6f,0.0f, 1.0f };
+        m_at = { 0.0f, 0.0f, 0.0f, 1.0f };
+        XMVECTOR up = { 0.0f, -1.0f, 0.0f, 0.0f };
 
         XMVECTOR direction = XMVector4Normalize(m_at - m_eye);
+		XMVECTOR right = XMVector3Normalize(XMVector3Cross(direction, up));
         m_up = XMVector3Normalize(XMVector3Cross(direction, right));
 
         // Rotate camera around Y axis.
-        XMMATRIX rotate = XMMatrixRotationY(XMConvertToRadians(45.0f));
+        XMMATRIX rotate = XMMatrixRotationY(XMConvertToRadians(-0.0f));
         m_eye = XMVector3Transform(m_eye, rotate);
         m_up = XMVector3Transform(m_up, rotate);
         
@@ -423,7 +424,7 @@ void D3D12RaytracingSimpleLighting::CreateDescriptorHeap()
     // 2 - vertex and index buffer SRVs
     // 1 - raytracing output texture SRV
     // 2 - bottom and top level acceleration structure fallback wrapped pointer UAVs
-    descriptorHeapDesc.NumDescriptors = 5; 
+    descriptorHeapDesc.NumDescriptors = 1065 * 2 + 1 + 2; 
     descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     descriptorHeapDesc.NodeMask = 0;
@@ -593,10 +594,10 @@ void saveFastLoadScene(const char* path)
 
 void loadScene(const char* path)
 {
-	const aiScene* scene = aiImportFile(path, aiProcessPreset_TargetRealtime_MaxQuality);;
-
 	if (fastLoadScene(path))
 		return;
+
+	const aiScene* scene = aiImportFile(path, aiProcessPreset_TargetRealtime_MaxQuality);;
 
 	for (unsigned int i = 0u; i < scene->mNumMeshes; ++i)
 	{
@@ -689,24 +690,38 @@ void D3D12RaytracingSimpleLighting::BuildGeometry()
 #ifndef _DEBUG
 	loadScene("bunny/bunny.obj");
 	//loadScene("buddha/buddha.obj");
-	//loadScene("dragon/dragon.obj");
+	loadScene("dragon/dragon.obj");
 	//loadScene("sportsCar/sportsCar.obj");
 	//loadScene("conference/conference.obj");
 #else 
-	loadScene("bunny/bunny.obj");
+	loadScene("dragon/dragon.obj");
+	//loadScene("sportsCar/sportsCar.obj");
+	//loadScene("conference/conference.obj");
+	//loadScene("bunny/bunny.obj");
 #endif
 
 	printf(" Number of vertices =   %i\n", g_Mesh.meshes[0].vertices.size());
 	printf(" Number of indices  =   %i\n", g_Mesh.meshes[0].indices.size());
 	
-    AllocateUploadBuffer(device, g_Mesh.meshes[0].indices.data(),  g_Mesh.meshes[0].indices.size()  * sizeof(Index),  &m_indexBuffer.resource);
-    AllocateUploadBuffer(device, g_Mesh.meshes[0].vertices.data(), g_Mesh.meshes[0].vertices.size() * sizeof(Vertex), &m_vertexBuffer.resource);
+	int i = 0;
+	for(auto& mesh : g_Mesh.meshes)
+	{
+		if (i == 0) {
+			++i;
+			continue;
+		}
 
-    // Vertex buffer is passed to the shader along with index buffer as a descriptor table.
-    // Vertex buffer descriptor must follow index buffer descriptor in the descriptor heap.
-    UINT descriptorIndexIB = CreateBufferSRV(&m_indexBuffer, g_Mesh.meshes[0].indices.size(), sizeof(Index));
-    UINT descriptorIndexVB = CreateBufferSRV(&m_vertexBuffer, g_Mesh.meshes[0].vertices.size(), sizeof(Vertex));
-    ThrowIfFalse(descriptorIndexVB == descriptorIndexIB + 1, L"Vertex Buffer descriptor index must follow that of Index Buffer descriptor index!");
+		D3DMesh d3dMesh{};
+		AllocateUploadBuffer(device, mesh.indices.data(), mesh.indices.size() * sizeof(Index), &d3dMesh.indexBuffer.resource);
+		AllocateUploadBuffer(device, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex), &d3dMesh.vertexBuffer.resource);
+
+		// Vertex buffer is passed to the shader along with index buffer as a descriptor table.
+		// Vertex buffer descriptor must follow index buffer descriptor in the descriptor heap.
+		UINT descriptorIndexIB = CreateBufferSRV(&d3dMesh.indexBuffer, mesh.indices.size(), sizeof(Index));
+		UINT descriptorIndexVB = CreateBufferSRV(&d3dMesh.vertexBuffer, mesh.vertices.size(), sizeof(Vertex));
+		m_d3dMeshes.emplace_back(d3dMesh);
+		ThrowIfFalse(descriptorIndexVB == descriptorIndexIB + 1, L"Vertex Buffer descriptor index must follow that of Index Buffer descriptor index!");
+	}
 }
 
 // Build acceleration structures needed for raytracing.
@@ -720,28 +735,34 @@ void D3D12RaytracingSimpleLighting::BuildAccelerationStructures()
     // Reset the command list for the acceleration structure construction.
     commandList->Reset(commandAllocator, nullptr);
 
-    D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {};
-    geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    geometryDesc.Triangles.IndexBuffer = m_indexBuffer.resource->GetGPUVirtualAddress();
-    geometryDesc.Triangles.IndexCount = static_cast<UINT>(m_indexBuffer.resource->GetDesc().Width) / sizeof(Index);
-    geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
-    geometryDesc.Triangles.Transform = 0;
-    geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-    geometryDesc.Triangles.VertexCount = static_cast<UINT>(m_vertexBuffer.resource->GetDesc().Width) / sizeof(Vertex);
-    geometryDesc.Triangles.VertexBuffer.StartAddress = m_vertexBuffer.resource->GetGPUVirtualAddress();
-    geometryDesc.Triangles.VertexBuffer.StrideInBytes = sizeof(Vertex);
+	std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometryDescs;
+	for(auto& d3dMesh : m_d3dMeshes)
+	{
+		D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {};
+		geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+		geometryDesc.Triangles.IndexBuffer = d3dMesh.indexBuffer.resource->GetGPUVirtualAddress();
+		geometryDesc.Triangles.IndexCount = static_cast<UINT>(d3dMesh.indexBuffer.resource->GetDesc().Width) / sizeof(Index);
+		geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+		geometryDesc.Triangles.Transform = 0;
+		geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+		geometryDesc.Triangles.VertexCount = static_cast<UINT>(d3dMesh.vertexBuffer.resource->GetDesc().Width) / sizeof(Vertex);
+		geometryDesc.Triangles.VertexBuffer.StartAddress = d3dMesh.vertexBuffer.resource->GetGPUVirtualAddress();
+		geometryDesc.Triangles.VertexBuffer.StrideInBytes = sizeof(Vertex);
 
-    // Mark the geometry as opaque. 
-    // PERFORMANCE TIP: mark geometry as opaque whenever applicable as it can enable important ray processing optimizations.
-    // Note: When rays encounter opaque geometry an any hit shader will not be executed whether it is present or not.
-    geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+		// Mark the geometry as opaque. 
+		// PERFORMANCE TIP: mark geometry as opaque whenever applicable as it can enable important ray processing optimizations.
+		// Note: When rays encounter opaque geometry an any hit shader will not be executed whether it is present or not.
+		geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+
+		geometryDescs.push_back(geometryDesc);
+	}
 
     // Get required sizes for an acceleration structure.
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
     D3D12_GET_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO_DESC prebuildInfoDesc = {};
     prebuildInfoDesc.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
     prebuildInfoDesc.Flags = buildFlags;
-    prebuildInfoDesc.NumDescs = 1;
+	prebuildInfoDesc.NumDescs = geometryDescs.size();
 
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO topLevelPrebuildInfo = {};
     prebuildInfoDesc.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
@@ -758,7 +779,7 @@ void D3D12RaytracingSimpleLighting::BuildAccelerationStructures()
 
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO bottomLevelPrebuildInfo = {};
     prebuildInfoDesc.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-    prebuildInfoDesc.pGeometryDescs = &geometryDesc;
+    prebuildInfoDesc.pGeometryDescs = geometryDescs.data();
     if (m_raytracingAPI == RaytracingAPI::FallbackLayer)
     {
         m_fallbackDevice->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfoDesc, &bottomLevelPrebuildInfo);
@@ -841,7 +862,7 @@ void D3D12RaytracingSimpleLighting::BuildAccelerationStructures()
         bottomLevelBuildDesc.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
         bottomLevelBuildDesc.DestAccelerationStructureData = { m_bottomLevelAccelerationStructure->GetGPUVirtualAddress(), bottomLevelPrebuildInfo.ResultDataMaxSizeInBytes };
         bottomLevelBuildDesc.NumDescs = 1;
-        bottomLevelBuildDesc.pGeometryDescs = &geometryDesc;
+        bottomLevelBuildDesc.pGeometryDescs = geometryDescs.data();
     }
 
     // Top Level Acceleration Structure desc
@@ -1075,7 +1096,7 @@ void D3D12RaytracingSimpleLighting::DoRaytracing()
     {
         descriptorSetCommandList->SetDescriptorHeaps(1, m_descriptorHeap.GetAddressOf());
         // Set index and successive vertex buffer decriptor tables
-        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::VertexBuffersSlot, m_indexBuffer.gpuDescriptorHandle);
+        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::VertexBuffersSlot, m_d3dMeshes[0].indexBuffer.gpuDescriptorHandle);
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, m_raytracingOutputResourceUAVGpuDescriptor);
     };
 
@@ -1161,8 +1182,11 @@ void D3D12RaytracingSimpleLighting::ReleaseDeviceDependentResources()
     m_descriptorHeap.Reset();
     m_descriptorsAllocated = 0;
     m_raytracingOutputResourceUAVDescriptorHeapIndex = UINT_MAX;
-    m_indexBuffer.resource.Reset();
-    m_vertexBuffer.resource.Reset();
+	for (auto& d3dMesh : m_d3dMeshes)
+	{
+		d3dMesh.indexBuffer.resource.Reset();
+		d3dMesh.vertexBuffer.resource.Reset();
+	}
     m_perFrameConstants.Reset();
     m_rayGenShaderTable.Reset();
     m_missShaderTable.Reset();
