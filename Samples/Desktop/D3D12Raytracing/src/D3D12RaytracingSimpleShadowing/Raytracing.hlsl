@@ -67,6 +67,7 @@ struct RayPayload
 {
     int hit;
     int depth;
+	int2 padding;
     float4 color;
 };
 
@@ -104,7 +105,7 @@ inline void GenerateCameraRay(uint2 index, out float3 origin, out float3 directi
 // Diffuse lighting calculation.
 float4 CalculateDiffuseLighting(float3 hitPosition, float3 normal)
 {
-    float3 pixelToLight = normalize(g_sceneCB.lightPosition - hitPosition);
+    float3 pixelToLight = normalize(g_sceneCB.lightPosition.xyz - hitPosition);
 
     // Diffuse contribution.
     float fNDotL = max(0.0f, abs(dot(pixelToLight, normal)));
@@ -130,7 +131,7 @@ void MyRaygenShader()
     // TMin should be kept small to prevent missing geometry at close contact areas.
     ray.TMin = 0.001;
     ray.TMax = 10000.0;
-    RayPayload payload = { 0, 0, float4(0, 0, 0, 0) };
+    RayPayload payload = { 0, 0, int2(0,0),float4(0, 0, 0, 0) };
     TraceRay(Scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, 0, 1, 0, ray, payload);
 
     // Write the raytraced color to the output texture.
@@ -168,15 +169,15 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
     //for (int i = 0; i < 32; ++i)
     if (payload.depth == 0)
     {
-        RayPayload shadowPayload = { 0, 1, float4(0, 0, 0, 0) };
+        RayPayload shadowPayload = { 0, 1, int2(0,0), float4(0, 0, 0, 0) };
 
         RayDesc ray;
         ray.Origin = hitPosition;
-        ray.Direction = normalize(g_sceneCB.lightPosition - hitPosition);
-        ray.TMin = 0.0001;
+        ray.Direction = normalize(g_sceneCB.lightPosition.xyz - hitPosition);
+        ray.TMin = 0.01;
         ray.TMax = 10000.0;
 
-        TraceRay(Scene, 0, ~0, 0, 1, 0, ray, shadowPayload);
+        TraceRay(Scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, 0, 1, 0, ray, shadowPayload);
 
         if (shadowPayload.hit)
             shadowed = true;
@@ -184,7 +185,7 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
 
     float4 diffuseColor = float4(0, 0, 0, 0);
 
-    if(!shadowed)
+    if(true)
     {
         // Compute the triangle's normal.
         // This is redundant and done for illustration purposes 

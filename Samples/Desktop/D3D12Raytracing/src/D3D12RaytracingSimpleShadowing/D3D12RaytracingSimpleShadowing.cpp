@@ -10,7 +10,7 @@
 //*********************************************************
 
 #include "stdafx.h"
-#include "D3D12RaytracingSimpleLighting.h"
+#include "D3D12RaytracingSimpleShadowing.h"
 #include "DirectXRaytracingHelper.h"
 #include "CompiledShaders\Raytracing.hlsl.h"
 
@@ -687,11 +687,11 @@ void D3D12RaytracingSimpleLighting::BuildGeometry()
     auto device = m_deviceResources->GetD3DDevice();
 
 #ifndef _DEBUG
-	//loadScene("bunny/bunny.obj");
+	loadScene("bunny/bunny.obj");
 	//loadScene("buddha/buddha.obj");
 	//loadScene("dragon/dragon.obj");
 	//loadScene("sportsCar/sportsCar.obj");
-	loadScene("conference/conference.obj");
+	//loadScene("conference/conference.obj");
 #else 
 	loadScene("bunny/bunny.obj");
 #endif
