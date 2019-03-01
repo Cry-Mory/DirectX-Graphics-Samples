@@ -14,20 +14,26 @@ The keys '1'...'7' can also be used to cycle through different modes (or using B
 * *Reflection Rays* - [7] Hybrid pass that renders primary diffuse with rasterization and if the ground plane is detected, fires of reflections rays.
 
 ## Controls:
-* forward/backward/strafe: left thumbstick or WASD (FPS controls)
-* up/down: triggers or E/Q
-* yaw/pitch: right thumbstick or mouse
-* toggle slow movement: click left thumbstick or lshift
-* open debug menu: back button or backspace
-* navigate debug menu: dpad or arrow keys
-* toggle debug menu item: A button or return
-* adjust debug menu value: dpad left/right or left/right arrow keys
+* forward/backward/strafe - left thumbstick or WASD (FPS controls).
+* triggers or E/Q - camera up/down .
+* right thumbstick or mouse - camera yaw/pitch.
+* F - freeze/unfreeze camera. 
+* right/left - cycle through pre-set camera positions.
+* click left thumbstick or lshift - toggle slow movement.
+* back button or backspace - open debug menu. 
+* dpad or arrow keys - navigate debug menu.
+* button or return - toggle debug menu item.
+* dpad left/right or left/right arrow key - adjust debug menu values.
 
 ## Limitations:
- * Currently only tested on the Compute-based Fallback Layer
- * Shadow pass is buggy due to incorrect ray generation
- * Mipmap calculation is incorrect and uses too low of an LOD for distant objects
- * The sample has a few visual bugs on Intel cards
+ * Currently only tested on the native DXR path of the Fallback Layer.
+ * Compute-path Fallback Layer:
+   * The sample TDRs on newer NVIDIA drivers. Use 398.82 drivers.
+   * Barycentric visualization (option 2 and 3) doesn't render properly.
+ * Shadow pass is buggy due to incorrect ray generation.
+ * Mipmap calculation is incorrect and uses too low of an LOD for distant objects.
+ * The sample has a few visual bugs on Intel cards.
+ * An incorrect debug layer error message is outputted when run due to an issue in the debug layer on SM 6.0 drivers. This can be ignored. "D3D12 ERROR: ID3D12Device::CopyDescriptors: Source ranges and dest ranges overlap, which results in undefined behavior."
 
 ## Requirements
 * Consult the main [D3D12 Raytracing readme](../../readme.md) for the requirements.
